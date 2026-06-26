@@ -56,6 +56,7 @@ services:
       - --web.enable-lifecycle
       - --web.enable-admin-api
       - --web.external-url=http://${DOMAIN:-localhost}/prometheus
+      - --web.route-prefix=/
     networks:
       - monitoring
     healthcheck:
@@ -92,6 +93,7 @@ services:
       - --config.file=/etc/alertmanager/alertmanager.yml
       - --storage.path=/alertmanager
       - --web.external-url=http://${DOMAIN:-localhost}/alertmanager
+      - --web.route-prefix=/
       - --cluster.listen-address=
     networks:
       - monitoring
