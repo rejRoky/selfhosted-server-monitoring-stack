@@ -60,7 +60,8 @@ groups:
       - alert: ContainerHighMemory
         expr: >
           (container_memory_working_set_bytes{name!=""} /
-           container_spec_memory_limit_bytes{name!="",container_spec_memory_limit_bytes>0}) * 100 > 80
+           container_spec_memory_limit_bytes{name!=""}) * 100 > 80
+          and container_spec_memory_limit_bytes{name!=""} > 0
         for: 5m
         labels:
           severity: warning
@@ -71,7 +72,8 @@ groups:
       - alert: ContainerMemoryOOMKillRisk
         expr: >
           (container_memory_working_set_bytes{name!=""} /
-           container_spec_memory_limit_bytes{name!="",container_spec_memory_limit_bytes>0}) * 100 > 95
+           container_spec_memory_limit_bytes{name!=""}) * 100 > 95
+          and container_spec_memory_limit_bytes{name!=""} > 0
         for: 2m
         labels:
           severity: critical
@@ -85,7 +87,8 @@ groups:
       - alert: ContainerVolumeUsageHigh
         expr: >
           (container_fs_usage_bytes{name!=""} /
-           container_fs_limit_bytes{name!="",container_fs_limit_bytes>0}) * 100 > 80
+           container_fs_limit_bytes{name!=""}) * 100 > 80
+          and container_fs_limit_bytes{name!=""} > 0
         for: 5m
         labels:
           severity: warning
