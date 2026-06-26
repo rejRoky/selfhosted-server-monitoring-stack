@@ -1,0 +1,115 @@
+global:
+  # How long to wait before re-sending a resolved alert.
+  resolve_timeout: 5m
+
+  # ── SMTP (email) defaults ────────────────────────────────────────────────
+  smtp_smarthost: "${SMTP_HOST:-smtp.example.com}:${SMTP_PORT:-587}"
+  smtp_from: "${SMTP_FROM:-alerts@example.com}"
+  smtp_auth_username: "${SMTP_USERNAME:-alerts@example.com}"
+  smtp_auth_password: "${SMTP_PASSWORD:-changeme}"
+  smtp_require_tls: true
+
+# ── Templates ──────────────────────────────────────────────────────────────
+# templates:
+#   - /etc/alertmanager/templates/*.tmpl
+
+# ── Routing tree ───────────────────────────────────────────────────────────
+route:
+  # Default grouping / timing for all alerts
+  group_by: ["alertname", "severity", "job"]
+  group_wait: 30s        # how long to wait before sending first notification for a new group
+  group_interval: 5m     # how long to wait before sending follow-up notifications
+  repeat_interval: 4h    # how often to re-send an unresolved alert
+
+  receiver: default
+
+  routes:
+    # Critical alerts → immediate notification to all receivers
+    - match:
+        severity: critical
+      receiver: critical-alerts
+      group_wait: 10s
+      repeat_interval: 1h
+
+    # Warning alerts → grouped, sent every 4 h
+    - match:
+        severity: warning
+      receiver: warning-alerts
+      repeat_interval: 4h
+
+    # Monitoring-stack alerts always go to all channels regardless of severity
+    - match_re:
+        alertname: "^(UptimeKumaDown|GrafanaDown|NginxDown|PrometheusConfigReloadFailed)$"
+      receiver: critical-alerts
+      group_wait: 5s
+      repeat_interval: 30m
+
+# ── Inhibition rules ───────────────────────────────────────────────────────
+inhibit_rules:
+  # If an instance is completely unreachable, suppress lower-severity alerts for it.
+  - source_match:
+      severity: critical
+    target_match:
+      severity: warning
+    equal: ["instance", "job"]
+
+  # If Nginx is down, don't also fire UptimeKuma/Grafana alerts (they're all behind it).
+  - source_match:
+      alertname: NginxDown
+    target_match_re:
+      alertname: "^(UptimeKumaDown|GrafanaDown)$"
+
+# ── Receivers ──────────────────────────────────────────────────────────────
+receivers:
+
+  - name: default
+    # Default: no-op.  Add your preferred channels below or reuse one of the named receivers.
+
+  - name: critical-alerts
+    email_configs:
+      - to: "${ALERT_EMAIL_TO:-oncall@example.com}"
+        send_resolved: true
+        headers:
+          Subject: "[CRITICAL] {{ .GroupLabels.alertname }} — {{ .CommonAnnotations.summary }}"
+        html: |
+          <h3>{{ .Status | toUpper }} — {{ .GroupLabels.alertname }}</h3>
+          {{ range .Alerts }}
+          <p><strong>{{ .Annotations.summary }}</strong><br>{{ .Annotations.description }}</p>
+          <p>Labels: {{ range .Labels.SortedPairs }}{{ .Name }}={{ .Value }} {{ end }}</p>
+          <p>Started: {{ .StartsAt.Format "2006-01-02 15:04:05 UTC" }}</p>
+          <hr>
+          {{ end }}
+
+    slack_configs:
+      - api_url: "${SLACK_WEBHOOK_URL:-https://hooks.slack.com/services/REPLACE/ME}"
+        channel: "${SLACK_CHANNEL:-#monitoring-alerts}"
+        send_resolved: true
+        icon_emoji: ":fire:"
+        color: '{{ if eq .Status "firing" }}danger{{ else }}good{{ end }}'
+        title: '{{ if eq .Status "firing" }}:red_circle: CRITICAL{{ else }}:large_green_circle: RESOLVED{{ end }} — {{ .GroupLabels.alertname }}'
+        text: |
+          {{ range .Alerts }}
+          *{{ .Annotations.summary }}*
+          {{ .Annotations.description }}
+          Labels: {{ range .Labels.SortedPairs }}`{{ .Name }}={{ .Value }}` {{ end }}
+          {{ end }}
+
+  - name: warning-alerts
+    email_configs:
+      - to: "${ALERT_EMAIL_TO:-oncall@example.com}"
+        send_resolved: true
+        headers:
+          Subject: "[WARNING] {{ .GroupLabels.alertname }} — {{ .CommonAnnotations.summary }}"
+
+    slack_configs:
+      - api_url: "${SLACK_WEBHOOK_URL:-https://hooks.slack.com/services/REPLACE/ME}"
+        channel: "${SLACK_CHANNEL:-#monitoring-alerts}"
+        send_resolved: true
+        icon_emoji: ":warning:"
+        color: '{{ if eq .Status "firing" }}warning{{ else }}good{{ end }}'
+        title: '{{ if eq .Status "firing" }}:large_yellow_circle: WARNING{{ else }}:large_green_circle: RESOLVED{{ end }} — {{ .GroupLabels.alertname }}'
+        text: |
+          {{ range .Alerts }}
+          *{{ .Annotations.summary }}*
+          {{ .Annotations.description }}
+          {{ end }}
