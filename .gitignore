@@ -1,0 +1,21 @@
+# Active environment — never commit real secrets
+.env
+
+# Generated credentials
+nginx/.htpasswd
+
+# SSL certificates
+nginx/ssl/*.pem
+nginx/ssl/*.key
+nginx/ssl/*.crt
+nginx/ssl/*.cer
+
+# Backups
+backups/
+
+# macOS
+.DS_Store
+
+# Editor
+.vscode/
+*.swp
