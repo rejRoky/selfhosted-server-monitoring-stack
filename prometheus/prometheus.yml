@@ -1,0 +1,64 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  scrape_timeout: 10s
+  external_labels:
+    monitor: server-monitoring
+    environment: production
+
+# ── Alert routing ──────────────────────────────────────────────────────────
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ["alertmanager:9093"]
+      timeout: 10s
+
+# ── Rule files ─────────────────────────────────────────────────────────────
+rule_files:
+  - /etc/prometheus/rules/*.yml
+
+# ── Scrape configs ─────────────────────────────────────────────────────────
+scrape_configs:
+
+  # Prometheus itself
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  # Alertmanager
+  - job_name: alertmanager
+    static_configs:
+      - targets: ["alertmanager:9093"]
+
+  # Host system metrics (CPU, memory, disk, network)
+  - job_name: node-exporter
+    static_configs:
+      - targets: ["node-exporter:9100"]
+        labels:
+          host: "${HOSTNAME:-docker-host}"
+    relabel_configs:
+      - source_labels: [__address__]
+        regex: "([^:]+).*"
+        target_label: instance
+        replacement: "$1"
+
+  # Per-container resource metrics
+  - job_name: cadvisor
+    static_configs:
+      - targets: ["cadvisor:8080"]
+    metric_relabel_configs:
+      # Carry the compose service name into a tidy "service" label
+      - source_labels: [container_label_com_docker_compose_service]
+        target_label: service
+      # Drop high-cardinality per-CPU and per-device metrics you rarely query
+      - source_labels: [__name__]
+        regex: "container_cpu_usage_seconds_total|container_fs_reads_bytes_total|container_fs_writes_bytes_total"
+        action: keep
+
+  # Uptime Kuma metrics endpoint (enable in Settings → Monitoring → Prometheus)
+  # Uncomment after enabling the metrics endpoint in the Uptime Kuma UI.
+  # - job_name: uptime-kuma
+  #   static_configs:
+  #     - targets: ["uptime-kuma:3001"]
+  #   metrics_path: /metrics
+  #   bearer_token: "REPLACE_WITH_YOUR_API_KEY"

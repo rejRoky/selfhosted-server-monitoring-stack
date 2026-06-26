@@ -1,0 +1,92 @@
+groups:
+  - name: services.availability
+    interval: 30s
+    rules:
+      # Fire if any scrape target is unreachable for more than 1 minute.
+      - alert: TargetDown
+        expr: up == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Scrape target {{ $labels.job }}/{{ $labels.instance }} is down"
+          description: "Prometheus cannot reach {{ $labels.instance }}. Check if the exporter is running."
+
+      # Warn when Prometheus loses a target that was previously healthy.
+      - alert: ScrapeDurationHigh
+        expr: scrape_duration_seconds > 5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Slow scrape for {{ $labels.job }}/{{ $labels.instance }}"
+          description: "Scrape is taking {{ $value | printf \"%.2f\" }}s — exporter may be overloaded."
+
+  - name: prometheus.health
+    rules:
+      - alert: PrometheusConfigReloadFailed
+        expr: prometheus_config_last_reload_successful != 1
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Prometheus config reload failed"
+          description: "Check prometheus.yml for syntax errors."
+
+      - alert: PrometheusRuleEvaluationFailed
+        expr: prometheus_rule_evaluation_failures_total > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Prometheus rule evaluation failures"
+          description: "{{ $value }} rule evaluation failures in the last interval."
+
+      - alert: PrometeusTSDBCompactionFailed
+        expr: increase(prometheus_tsdb_compactions_failed_total[1h]) > 0
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Prometheus TSDB compaction failed"
+          description: "TSDB compaction errors detected — check disk health."
+
+      - alert: AlertmanagerNotificationsFailed
+        expr: >
+          rate(alertmanager_notifications_failed_total[5m]) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Alertmanager notification failures"
+          description: "Alertmanager is failing to deliver notifications via {{ $labels.integration }}."
+
+  - name: monitoring.stack
+    rules:
+      # Alert when any service in the monitoring stack itself goes down.
+      - alert: UptimeKumaDown
+        expr: absent(container_last_seen{name="uptime-kuma"})
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Uptime Kuma is down"
+          description: "The uptime monitoring service itself is unreachable."
+
+      - alert: GrafanaDown
+        expr: absent(container_last_seen{name="grafana"})
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Grafana is down"
+          description: "The Grafana dashboard service is unreachable."
+
+      - alert: NginxDown
+        expr: absent(container_last_seen{name="nginx-proxy"})
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Nginx reverse proxy is down"
+          description: "All external traffic is affected — the reverse proxy is unreachable."

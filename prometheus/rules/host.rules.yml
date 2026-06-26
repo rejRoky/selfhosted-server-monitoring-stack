@@ -1,0 +1,153 @@
+groups:
+  - name: host.cpu
+    interval: 30s
+    rules:
+      - alert: HostHighCPULoad
+        expr: >
+          100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High CPU load on {{ $labels.instance }}"
+          description: "CPU usage is {{ $value | printf \"%.1f\" }}% (threshold 80%) for 5 min."
+
+      - alert: HostCriticalCPULoad
+        expr: >
+          100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 95
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Critical CPU load on {{ $labels.instance }}"
+          description: "CPU usage is {{ $value | printf \"%.1f\" }}% (threshold 95%) for 2 min."
+
+      - alert: HostHighLoadAverage
+        expr: >
+          node_load15 / count without(cpu, mode) (node_cpu_seconds_total{mode="idle"}) > 1.5
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High load average on {{ $labels.instance }}"
+          description: "15-minute load average is {{ $value | printf \"%.2f\" }} per core."
+
+  - name: host.memory
+    interval: 30s
+    rules:
+      - alert: HostLowMemory
+        expr: >
+          (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100 < 15
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Low memory on {{ $labels.instance }}"
+          description: "Available memory is {{ $value | printf \"%.1f\" }}% (threshold 15%)."
+
+      - alert: HostCriticalMemory
+        expr: >
+          (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100 < 5
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Critical memory on {{ $labels.instance }}"
+          description: "Available memory is {{ $value | printf \"%.1f\" }}% (threshold 5%)."
+
+      - alert: HostSwapUsageHigh
+        expr: >
+          (1 - (node_memory_SwapFree_bytes / node_memory_SwapTotal_bytes)) * 100 > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High swap usage on {{ $labels.instance }}"
+          description: "Swap is {{ $value | printf \"%.1f\" }}% used."
+
+  - name: host.disk
+    interval: 60s
+    rules:
+      - alert: HostDiskSpaceLow
+        expr: >
+          (node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|squashfs"} /
+           node_filesystem_size_bytes{fstype!~"tmpfs|overlay|squashfs"}) * 100 < 20
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Disk space low on {{ $labels.instance }}:{{ $labels.mountpoint }}"
+          description: "{{ $value | printf \"%.1f\" }}% free space remaining."
+
+      - alert: HostDiskSpaceCritical
+        expr: >
+          (node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|squashfs"} /
+           node_filesystem_size_bytes{fstype!~"tmpfs|overlay|squashfs"}) * 100 < 5
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Disk space critical on {{ $labels.instance }}:{{ $labels.mountpoint }}"
+          description: "Only {{ $value | printf \"%.1f\" }}% free — risk of write failures."
+
+      - alert: HostDiskWillFillIn24h
+        expr: >
+          predict_linear(
+            node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|squashfs"}[6h], 24*3600
+          ) < 0
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Disk will fill in <24 h on {{ $labels.instance }}:{{ $labels.mountpoint }}"
+          description: "Current write rate will exhaust disk space within 24 hours."
+
+      - alert: HostDiskReadErrors
+        expr: rate(node_disk_read_errors_total[5m]) > 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Disk read errors on {{ $labels.instance }}"
+          description: "Device {{ $labels.device }} is reporting read errors."
+
+  - name: host.network
+    interval: 30s
+    rules:
+      - alert: HostNetworkReceiveErrors
+        expr: rate(node_network_receive_errs_total[5m]) / rate(node_network_receive_packets_total[5m]) > 0.01
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Network receive errors on {{ $labels.instance }} ({{ $labels.device }})"
+          description: "Error rate is {{ $value | printf \"%.2f\" }}% of received packets."
+
+      - alert: HostNetworkTransmitErrors
+        expr: rate(node_network_transmit_errs_total[5m]) / rate(node_network_transmit_packets_total[5m]) > 0.01
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Network transmit errors on {{ $labels.instance }} ({{ $labels.device }})"
+          description: "Error rate is {{ $value | printf \"%.2f\" }}% of transmitted packets."
+
+  - name: host.system
+    rules:
+      - alert: HostSystemdServiceFailed
+        expr: node_systemd_unit_state{state="failed"} == 1
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Systemd unit failed on {{ $labels.instance }}"
+          description: "Unit {{ $labels.name }} is in a failed state."
+
+      - alert: HostClockSkew
+        expr: abs(node_timex_offset_seconds) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Clock skew detected on {{ $labels.instance }}"
+          description: "NTP offset is {{ $value }}s — check NTP sync."

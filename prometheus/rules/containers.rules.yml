@@ -1,0 +1,94 @@
+groups:
+  - name: containers.availability
+    interval: 30s
+    rules:
+      - alert: ContainerDown
+        expr: absent(container_last_seen{name!=""}) or time() - container_last_seen{name!=""} > 60
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Container {{ $labels.name }} is down"
+          description: "Container {{ $labels.name }} has not been seen for more than 1 minute."
+
+      - alert: ContainerKilled
+        expr: time() - container_last_seen{name!=""} > 60
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Container {{ $labels.name }} killed"
+          description: "Container {{ $labels.name }} disappeared from cAdvisor metrics."
+
+      - alert: ContainerRestarting
+        expr: >
+          increase(container_start_time_seconds{name!=""}[15m]) > 3
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Container {{ $labels.name }} is restarting frequently"
+          description: "Container has restarted {{ $value | printf \"%.0f\" }} times in the last 15 minutes."
+
+  - name: containers.cpu
+    interval: 30s
+    rules:
+      - alert: ContainerHighCPU
+        expr: >
+          (sum by(name) (rate(container_cpu_usage_seconds_total{name!=""}[5m])) * 100) > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High CPU in container {{ $labels.name }}"
+          description: "Container is using {{ $value | printf \"%.1f\" }}% CPU."
+
+      - alert: ContainerCPUThrottled
+        expr: >
+          rate(container_cpu_cfs_throttled_seconds_total{name!=""}[5m]) /
+          rate(container_cpu_cfs_periods_total{name!=""}[5m]) > 0.25
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Container {{ $labels.name }} CPU is being throttled"
+          description: "{{ $value | printf \"%.0f\" }}% of CPU periods are throttled — consider raising the CPU limit."
+
+  - name: containers.memory
+    interval: 30s
+    rules:
+      - alert: ContainerHighMemory
+        expr: >
+          (container_memory_working_set_bytes{name!=""} /
+           container_spec_memory_limit_bytes{name!="",container_spec_memory_limit_bytes>0}) * 100 > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory in container {{ $labels.name }}"
+          description: "Container is using {{ $value | printf \"%.1f\" }}% of its memory limit."
+
+      - alert: ContainerMemoryOOMKillRisk
+        expr: >
+          (container_memory_working_set_bytes{name!=""} /
+           container_spec_memory_limit_bytes{name!="",container_spec_memory_limit_bytes>0}) * 100 > 95
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "OOM kill risk for container {{ $labels.name }}"
+          description: "Container is at {{ $value | printf \"%.1f\" }}% of its memory limit."
+
+  - name: containers.storage
+    interval: 60s
+    rules:
+      - alert: ContainerVolumeUsageHigh
+        expr: >
+          (container_fs_usage_bytes{name!=""} /
+           container_fs_limit_bytes{name!="",container_fs_limit_bytes>0}) * 100 > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High volume usage in container {{ $labels.name }}"
+          description: "Container volume is {{ $value | printf \"%.1f\" }}% full."
