@@ -1,0 +1,12 @@
+apiVersion: 1
+
+providers:
+  - name: monitoring-dashboards
+    orgId: 1
+    type: file
+    disableDeletion: true      # prevent accidental deletion via UI
+    updateIntervalSeconds: 30  # pick up new/changed dashboard files automatically
+    allowUiUpdates: false      # force all edits to go through files, not the UI
+    options:
+      path: /etc/grafana/provisioning/dashboards/files
+      foldersFromFilesStructure: false
